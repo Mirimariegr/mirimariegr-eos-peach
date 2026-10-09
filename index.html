@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <title>EOS Peach · Contratos</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,700&family=Figtree:wght@400;500;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --night: #14532d;
+        --night-2: #166534;
+        --sun-1: #fdba74;
+        --sun-2: #fb923c;
+        --gold: #fef3c7;
+        --ink: #1c1917;
+        --muted: #78716c;
+        --line: #e7e5e4;
+        --bg: #fff7ed;
+        --card: #ffffff;
+        --ok: #047857;
+        --ok-bg: #ecfdf5;
+        --err: #be123c;
+        --err-bg: #fff1f2;
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        background: var(--bg);
+        color: var(--ink);
+        font-family: 'Figtree', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .hero {
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(135deg, var(--night) 0%, var(--night-2) 100%);
+        color: #fff;
+        padding: 40px 16px 96px;
+      }
+      .hero::after {
+        content: '';
+        position: absolute;
+        right: -120px;
+        top: -140px;
+        width: 380px;
+        height: 380px;
+        border-radius: 50%;
+        background: radial-gradient(circle, var(--sun-1) 0%, var(--sun-2) 50%, transparent 70%);
+        opacity: 0.45;
+      }
+      .hero-inner { position: relative; z-index: 1; max-width: 760px; margin: 0 auto; }
+      .brand { display: flex; align-items: center; gap: 10px; }
+      .brand img { width: 36px; height: 36px; }
+      .brand span {
+        font-family: 'Bricolage Grotesque', 'Figtree', sans-serif;
+        font-size: 28px;
+        letter-spacing: 0.02em;
+      }
+      .tag {
+        font-style: normal; font-size: 14px; font-weight: 700; letter-spacing: 0.04em;
+        padding: 3px 10px; margin-left: 6px; border-radius: 999px;
+        background: var(--sun-1); color: var(--night); vertical-align: middle;
+      }
+      details.raw { margin-top: 10px; font-size: 13px; color: var(--muted); }
+      details.raw pre { white-space: pre-wrap; word-break: break-word; background: #f5f5f4; padding: 10px; border-radius: 8px; color: var(--ink); }
+      .hero h1 { margin: 28px 0 8px; font-family: 'Bricolage Grotesque', 'Figtree', sans-serif; font-size: 30px; font-weight: 700; }
+      .hero p { margin: 0; max-width: 560px; color: #dcfce7; line-height: 1.55; }
+      main { max-width: 760px; margin: -64px auto 0; padding: 0 16px 64px; position: relative; z-index: 2; }
+      .card {
+        background: var(--card);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 20px;
+        box-shadow: 0 12px 32px rgba(30, 27, 75, 0.12);
+      }
+      .drop {
+        display: flex; flex-direction: column; align-items: center; gap: 8px;
+        padding: 40px 16px;
+        border: 2px dashed #d6d3d1;
+        border-radius: 14px;
+        text-align: center;
+        cursor: pointer;
+        transition: border-color 0.15s, background 0.15s;
+      }
+      .drop:hover, .drop.over { border-color: var(--sun-2); background: #fff7ed; }
+      .drop strong { font-size: 16px; }
+      .drop span { color: var(--muted); font-size: 14px; }
+      button {
+        margin-top: 16px; width: 100%;
+        font: inherit; font-weight: 700;
+        padding: 12px; border: 0; border-radius: 12px;
+        background: var(--night);
+        color: #fff; cursor: pointer;
+      }
+      button:hover { filter: brightness(1.05); }
+      button:disabled { background: #d6d3d1; cursor: default; filter: none; }
+      #list { list-style: none; margin: 20px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+      #list li { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+      .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+      .name { font-weight: 700; overflow-wrap: anywhere; }
+      .badge {
+        flex-shrink: 0; font-size: 12px; font-weight: 700;
+        padding: 3px 10px; border-radius: 999px;
+        background: #f5f5f4; color: var(--muted);
+      }
+      .badge.ok { background: var(--ok-bg); color: var(--ok); }
+      .badge.err { background: var(--err-bg); color: var(--err); }
+      .badge.run { background: #fff7ed; color: #c2410c; }
+      .person {
+        margin: 14px 0 0; padding-top: 12px; border-top: 1px solid var(--line);
+        font-weight: 700; font-size: 14px; color: var(--night);
+      }
+      dl { display: grid; grid-template-columns: max-content 1fr; gap: 4px 14px; margin: 6px 0 0; font-size: 14px; }
+      dt { color: var(--muted); }
+      dd { margin: 0; overflow-wrap: anywhere; }
+      @media (max-width: 520px) {
+        dl { grid-template-columns: 1fr; gap: 0; }
+        dd { margin-bottom: 6px; }
+      }
+      .usage {
+        margin: 12px 0 0; padding-top: 10px; border-top: 1px dashed var(--line);
+        font-size: 13px; color: var(--muted);
+      }
+      .usage strong { color: var(--ink); }
+      #total { margin: 14px 0 0; font-size: 13px; color: var(--muted); text-align: right; }
+      #total strong { color: var(--ink); }
+      .msg { margin: 10px 0 0; font-size: 14px; color: var(--err); }
+      footer { margin-top: 28px; font-size: 12px; color: var(--muted); text-align: center; }
+    </style>
+  </head>
+  <body>
+    <section class="hero">
+      <div class="hero-inner">
+        <div class="brand"><img src="favicon.svg" alt="" /><span>EOS <em class="tag">Peach</em></span></div>
+        <h1>Extracción de datos de contratos</h1>
+        <p>
+          Versión que procesa los contratos con <strong>Peach</strong>. Sube un PDF (o imagen o DOCX): Peach extrae los
+          intervinientes y se añade una fila por cada uno a la pestaña «Peach» del Google Sheet.
+        </p>
+      </div>
+    </section>
+
+    <main>
+      <form class="card" id="form">
+        <label class="drop" id="drop" for="file">
+          <strong>Arrastra los contratos aquí o pulsa para elegirlos</strong>
+          <span id="picked">PDF, JPG, PNG o DOCX · máximo 50 MB por archivo</span>
+        </label>
+        <input id="file" type="file" accept=".pdf,.jpg,.jpeg,.png,.docx" multiple hidden />
+
+        <button type="submit" id="send" disabled>Procesar con Peach</button>
+      </form>
+
+      <ul id="list"></ul>
+      <p id="total" hidden></p>
+
+      <footer>Los contratos se procesan en n8n con Peach (entorno de desarrollo) y se guardan en la pestaña «Peach» del Sheet.</footer>
+    </main>
+
+    <script>
+      // URL de producción del webhook del workflow «EOS Peach · Documento a Google Sheet» en n8n.
+      // Se puede sobrescribir con ?webhook=<url> para probar con la URL de test.
+      const WEBHOOK_URL =
+        new URLSearchParams(location.search).get('webhook') ||
+        'https://n8n-g3mx.srv1848372.hstgr.cloud/webhook/eos-peach'
+      const MAX_BYTES = 50 * 1024 * 1024
+      const ACCEPTED = /\.(pdf|jpe?g|png|docx)$/i
+      const FIELDS = [
+        'DNI/NIE',
+        'DIRECCION PARTICULAR COMPLETA',
+        'POBLACION',
+        'PROVINCIA',
+        'PAIS',
+        'CODIGO POSTAL',
+      ]
+
+      const form = document.getElementById('form')
+      const drop = document.getElementById('drop')
+      const input = document.getElementById('file')
+      const picked = document.getElementById('picked')
+      const send = document.getElementById('send')
+      const list = document.getElementById('list')
+      let files = []
+      const totals = { docs: 0, ms: 0 }
+      const segs = (ms) => (ms / 1000).toLocaleString('es-ES', { maximumFractionDigits: 1 }) + ' s'
+
+      function showUsage(li, consumo, datosPeach) {
+        if (consumo && consumo.tiempo_ms) {
+          const p = document.createElement('p')
+          p.className = 'usage'
+          p.innerHTML = 'Tiempo en Peach: <strong></strong> · Consultas de estado: <strong></strong> · Id Peach: <strong></strong>'
+          const [a, b, c] = p.querySelectorAll('strong')
+          a.textContent = segs(consumo.tiempo_ms)
+          b.textContent = consumo.consultas ?? '–'
+          c.textContent = consumo.documento_peach ?? '–'
+          li.appendChild(p)
+
+          totals.docs += 1
+          totals.ms += consumo.tiempo_ms
+          const total = document.getElementById('total')
+          total.hidden = false
+          total.innerHTML = 'Total de esta sesión: <strong></strong> documentos · <strong></strong> en Peach'
+          const [d, t] = total.querySelectorAll('strong')
+          d.textContent = totals.docs
+          t.textContent = segs(totals.ms)
+        }
+        if (datosPeach) {
+          const det = document.createElement('details')
+          det.className = 'raw'
+          det.innerHTML = '<summary>Ver datos originales de Peach</summary><pre></pre>'
+          det.querySelector('pre').textContent = JSON.stringify(datosPeach, null, 2)
+          li.appendChild(det)
+        }
+      }
+
+      function setFiles(fileList) {
+        files = Array.from(fileList)
+        picked.textContent = files.length
+          ? files.map((f) => f.name).join(', ')
+          : 'PDF, JPG, PNG o DOCX · máximo 50 MB por archivo'
+        send.disabled = files.length === 0
+      }
+
+      input.addEventListener('change', () => setFiles(input.files))
+      ;['dragenter', 'dragover'].forEach((ev) =>
+        drop.addEventListener(ev, (e) => {
+          e.preventDefault()
+          drop.classList.add('over')
+        }),
+      )
+      ;['dragleave', 'drop'].forEach((ev) =>
+        drop.addEventListener(ev, (e) => {
+          e.preventDefault()
+          drop.classList.remove('over')
+        }),
+      )
+      drop.addEventListener('drop', (e) => setFiles(e.dataTransfer.files))
+
+      function addItem(name) {
+        const li = document.createElement('li')
+        li.innerHTML = '<div class="row"><span class="name"></span><span class="badge">En cola</span></div>'
+        li.querySelector('.name').textContent = name
+        list.prepend(li)
+        return li
+      }
+
+      function setStatus(li, text, kind) {
+        const badge = li.querySelector('.badge')
+        badge.textContent = text
+        badge.className = 'badge' + (kind ? ' ' + kind : '')
+      }
+
+      function showError(li, message) {
+        setStatus(li, 'Error', 'err')
+        const p = document.createElement('p')
+        p.className = 'msg'
+        p.textContent = message
+        li.appendChild(p)
+      }
+
+      function showRows(li, filas) {
+        setStatus(li, filas.length === 1 ? '1 fila añadida' : filas.length + ' filas añadidas', 'ok')
+        filas.forEach((fila) => {
+          const title = document.createElement('p')
+          title.className = 'person'
+          title.textContent = fila['NOMBRE INTERVINIENTE'] || 'Interviniente sin nombre'
+          const dl = document.createElement('dl')
+          FIELDS.forEach((key) => {
+            if (!fila[key]) return
+            const dt = document.createElement('dt')
+            dt.textContent = key
+            const dd = document.createElement('dd')
+            dd.textContent = fila[key]
+            dl.append(dt, dd)
+          })
+          li.append(title, dl)
+        })
+      }
+
+      async function upload(file, li) {
+        if (!ACCEPTED.test(file.name)) return showError(li, 'Formato no soportado. Usa PDF, JPG, PNG o DOCX.')
+        if (file.size > MAX_BYTES) return showError(li, 'El archivo supera los 50 MB.')
+
+        setStatus(li, 'Procesando en Peach…', 'run')
+        const body = new FormData()
+        body.append('file', file, file.name)
+
+        let res
+        try {
+          res = await fetch(WEBHOOK_URL, { method: 'POST', body })
+        } catch (err) {
+          return showError(li, 'No se pudo conectar con el servicio. Comprueba que el workflow de n8n está activo.')
+        }
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || !data.ok) {
+          const detail = typeof data.error === 'string' ? data.error : 'Respuesta ' + res.status + ' del servidor.'
+          return showError(li, detail)
+        }
+        showRows(li, data.filas || [])
+        showUsage(li, data.consumo, data.datos_peach)
+      }
+
+      form.addEventListener('submit', async (e) => {
+        e.preventDefault()
+        const queue = files.map((f) => [f, addItem(f.name)])
+        send.disabled = true
+        input.value = ''
+        setFiles([])
+        for (const [file, li] of queue) await upload(file, li)
+      })
+    </script>
+  </body>
+</html>
