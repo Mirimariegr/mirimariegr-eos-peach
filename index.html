@@ -175,6 +175,7 @@
         'PROVINCIA',
         'PAIS',
         'CODIGO POSTAL',
+        'SEPA (Nº ORDEN DOMICILIACION)',
       ]
 
       const form = document.getElementById('form')
@@ -299,7 +300,9 @@
           const detail = typeof data.error === 'string' ? data.error : 'Respuesta ' + res.status + ' del servidor.'
           return showError(li, detail)
         }
-        showRows(li, data.filas || [])
+        const sepaPorDni = new Map((data.sepa || []).map((r) => [r['DNI/NIE'], r['SEPA (Nº ORDEN DOMICILIACION)']]))
+        const filas = (data.filas || []).map((f) => ({ ...f, 'SEPA (Nº ORDEN DOMICILIACION)': sepaPorDni.get(f['DNI/NIE']) || '' }))
+        showRows(li, filas)
         showUsage(li, data.consumo, data.datos_peach)
       }
 
