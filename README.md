@@ -29,19 +29,17 @@ La web muestra los intervinientes, el tiempo de procesado en Peach y los datos o
 
 **Web:** https://mirimariegr.github.io/mirimariegr-eos-peach/acartoes/
 
-Copia de la web anterior para los documentos de tarjetas de novobanco (Alterações / Pedidos, Pagamentos, Reclamações).
+Procesa documentos de tarjetas de novobanco (Alterações / Pedidos, Pagamentos, Reclamações) con **Claude** y guarda las firmas en **Google Drive**.
 
-1. En el navegador: abre el TIF (o PDF/imagen), lee los códigos de barras de cada página (ITF de 20 dígitos = **CB**, Code 39 `SEPnn` = **ETIQUETA**) y convierte el TIF a PDF, porque Peach no acepta TIF.
-2. Envía el PDF y los códigos al webhook `/webhook/acartoes` del workflow de n8n **«ACartoes · Peach + código de barras a Google Sheet»** (campos `file`, `cb`, `etiqueta`, `codigos`, `nombre_original`).
-3. n8n procesa el documento con Peach y añade una fila a la pestaña **«ACartoes»** del Sheet:
+1. En el navegador: abre el TIF (o PDF/imagen) y lee los códigos de barras de cada página (ITF de 20 dígitos = **CB**, Code 39 `SEPnn` = **ETIQUETA**).
+2. Envía las páginas (JPEG, lado mayor 1568 px) al webhook `/webhook/acartoes` del workflow de n8n **«ACartoes · Claude + firmas a Drive y Google Sheet»**. Claude extrae los datos y devuelve la caja de cada firma o sello.
+3. La web recorta cada firma del original a resolución completa y la envía con la fila a `/webhook/acartoes-guardar`: n8n sube los PNG a Google Drive y añade la fila a la pestaña **«ACartoes»** del Sheet EOS.
 
-| NOMBRE PDF | URL DOCUMENTO | TIPO | CB | DATACB | DATA | ETIQUETA | NCONTA | NCARTAO | NCONTACARTAO | FUENTE CB | OTROS DATOS |
-| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| NOMBRE PDF | TIPO | CB | DATACB | DATA | ETIQUETA | NCONTA | NCARTAO | NCONTACARTAO | N FIRMAS | FIRMAS | FUENTE CB | OTROS DATOS |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 
-- **CB / ETIQUETA**: los del código de barras leído en la web; si no se pueden leer, los de Peach (`FUENTE CB` indica cuál).
+- **CB / ETIQUETA**: los leídos en la web; si no se pueden leer, los de Claude (`FUENTE CB`).
 - **DATACB**: dígitos 9-14 del CB en formato DDMMAA (`0007 0493 210926 007361` → `21/09/2026`).
-- **TIPO**: por la etiqueta (SEP2 Alterações Pedidos, SEP14 Pagamentos, SEP27 Reclamações) o por el código de formulario del CB (1429 / 0493 / 0656).
-- **NCARTAO** y **NCONTACARTAO** se devuelven siempre por separado.
-- **OTROS DATOS**: el resto de lo que devuelva Peach, en JSON.
-
-Configuración: `PIPELINE_ID` y `DOCUMENT_TYPE_ID` en el nodo «Normalizar archivo y config Peach» del workflow ACartoes.
+- **TIPO**: por la etiqueta (SEP2, SEP14, SEP27) o por el código de formulario del CB (1429 / 0493 / 0656).
+- **FIRMAS**: enlaces a los PNG en Drive, nombrados `CB_pPAGINA_TIPO_N.png` (tipo: cliente, banco, sello, otro).
+- `acartoes/prueba/pagina_prueba.png`: página de prueba con datos inventados.

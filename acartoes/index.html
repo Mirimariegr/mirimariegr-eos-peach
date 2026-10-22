@@ -69,7 +69,7 @@
       button:hover { filter: brightness(1.05); }
       button:disabled { background: #d6d3d1; cursor: default; filter: none; }
       #list { list-style: none; margin: 20px 0 0; padding: 0; display: flex; flex-direction: column; gap: 10px; }
-      #list li { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
+      #list > li { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; }
       .row { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
       .name { font-weight: 700; overflow-wrap: anywhere; }
       .badge { flex-shrink: 0; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; background: #f5f5f4; color: var(--muted); }
@@ -90,12 +90,17 @@
       #total strong { color: var(--ink); }
       .msg { margin: 10px 0 0; font-size: 14px; color: var(--err); }
       .warn { margin: 10px 0 0; font-size: 13px; color: #c2410c; }
+      .firmas { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin-top: 8px; }
+      .firmas figure { margin: 0; border: 1px solid var(--line); border-radius: 10px; padding: 6px; background: #fafaf9; }
+      .firmas img { display: block; width: 100%; height: 90px; object-fit: contain; background: #fff; border-radius: 6px; }
+      .firmas figcaption { margin-top: 4px; font-size: 12px; color: var(--muted); overflow-wrap: anywhere; }
+      ul.links { margin: 6px 0 0; padding-left: 18px; font-size: 14px; }
+      ul.links a { color: var(--night-2); overflow-wrap: anywhere; }
       footer { margin-top: 28px; font-size: 12px; color: var(--muted); text-align: center; }
     </style>
-    <!-- Lectura de TIF, códigos de barras y generación del PDF que se envía a Peach -->
+    <!-- Lectura de TIF y de códigos de barras -->
     <script src="https://cdn.jsdelivr.net/npm/utif@3.1.0/UTIF.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/zxing-wasm@3.1.4/dist/iife/reader/index.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/jspdf@4.2.1/dist/jspdf.umd.min.js"></script>
   </head>
   <body>
     <section class="hero">
@@ -104,8 +109,8 @@
         <h1>Documentos de tarjetas</h1>
         <p>
           Sube los documentos escaneados (TIF, PDF o imagen) de <strong>Alterações / Pedidos</strong>, <strong>Pagamentos</strong> o
-          <strong>Reclamações</strong>. La web lee el código de barras y la etiqueta SEP, Peach extrae el resto de datos y se añade una
-          fila a la pestaña «ACartoes» del Google Sheet.
+          <strong>Reclamações</strong>. La web lee el código de barras y la etiqueta SEP, Claude extrae el resto de datos y localiza las
+          firmas, las firmas se guardan como imágenes en Google Drive y se añade una fila a la pestaña «ACartoes» del Google Sheet.
         </p>
       </div>
     </section>
@@ -123,18 +128,19 @@
       <ul id="list"></ul>
       <p id="total" hidden></p>
 
-      <footer>Los códigos de barras se leen en tu navegador; los documentos se procesan en n8n con Peach (entorno de desarrollo).</footer>
+      <footer>Los códigos de barras y los recortes de las firmas se hacen en tu navegador; los datos los extrae Claude a través de n8n.</footer>
     </main>
 
     <script type="module">
-      // URL de producción del webhook del workflow «ACartoes · Peach + código de barras a Google Sheet» en n8n.
-      // Se puede sobrescribir con ?webhook=<url> para probar con la URL de test.
-      const WEBHOOK_URL =
-        new URLSearchParams(location.search).get('webhook') || 'https://n8n-g3mx.srv1848372.hstgr.cloud/webhook/acartoes'
+      // Webhooks del workflow «ACartoes · Claude + firmas a Drive y Google Sheet» en n8n.
+      // Se puede cambiar la base con ?n8n=<url> (p. ej. la URL de test: https://…/webhook-test).
+      const N8N = new URLSearchParams(location.search).get('n8n') || 'https://n8n-g3mx.srv1848372.hstgr.cloud/webhook'
+      const WEBHOOK_URL = N8N + '/acartoes' // Claude: datos + cajas de firmas
+      const WEBHOOK_GUARDAR = N8N + '/acartoes-guardar' // firmas a Drive + fila en la hoja
+      const LADO_CLAUDE = 1568 // lado mayor de cada página enviada a Claude (px)
       const PDFJS = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@4.10.38/build/'
       const MAX_BYTES = 50 * 1024 * 1024
       const ACCEPTED = /\.(tiff?|pdf|jpe?g|png)$/i
-      const PDF_WIDTH = 1700 // px por página en el PDF que se envía a Peach (~200 ppp en A4)
       const FIELDS = [
         ['TIPO', 'Tipo de documento'],
         ['CB', 'Código de barras'],
@@ -144,6 +150,7 @@
         ['NCONTA', 'Nº de Conta'],
         ['NCARTAO', 'Nº de Cartão'],
         ['NCONTACARTAO', 'Nº de Conta Cartão'],
+        ['N FIRMAS', 'Firmas guardadas'],
         ['FUENTE CB', 'Origen del CB'],
       ]
       const TIPOS = { SEP2: 'Alterações Pedidos', SEP14: 'Pagamentos', SEP27: 'Reclamações' }
@@ -234,27 +241,41 @@
         return f.getUTCDate() === +dd && f.getUTCMonth() === +mm - 1 ? `${dd}/${mm}/20${aa}` : ''
       }
 
-      // ---------- PDF para Peach (Peach no acepta TIF) ----------
-      function pagesToPdf(pages) {
-        const { jsPDF } = window.jspdf
-        let doc
-        pages.forEach((src, i) => {
-          const scale = Math.min(1, PDF_WIDTH / src.width)
-          const c = document.createElement('canvas')
-          c.width = Math.round(src.width * scale)
-          c.height = Math.round(src.height * scale)
-          const ctx = c.getContext('2d')
-          ctx.fillStyle = '#fff'
-          ctx.fillRect(0, 0, c.width, c.height)
-          ctx.drawImage(src, 0, 0, c.width, c.height)
-          const w = 210, h = (210 * c.height) / c.width // ancho A4 en mm
-          const orientation = h >= w ? 'p' : 'l'
-          if (i === 0) doc = new jsPDF({ orientation, unit: 'mm', format: [w, h], compress: true })
-          else doc.addPage([w, h], orientation)
-          doc.addImage(c.toDataURL('image/jpeg', 0.8), 'JPEG', 0, 0, w, h)
-        })
-        return doc.output('blob')
+      // ---------- Páginas para Claude y recorte de firmas ----------
+      function toBlob(canvas, type, q) {
+        return new Promise((ok) => canvas.toBlob(ok, type, q))
       }
+
+      async function pageForClaude(src) {
+        const k = Math.min(1, LADO_CLAUDE / Math.max(src.width, src.height))
+        const c = document.createElement('canvas')
+        c.width = Math.round(src.width * k)
+        c.height = Math.round(src.height * k)
+        const ctx = c.getContext('2d')
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(0, 0, c.width, c.height)
+        ctx.drawImage(src, 0, 0, c.width, c.height)
+        return { blob: await toBlob(c, 'image/jpeg', 0.85), w: c.width, h: c.height }
+      }
+
+      // Recorta una firma de la página original (resolución completa) con un pequeño margen
+      async function cropSignature(page, f) {
+        const W = page.width, H = page.height
+        let x1 = f.x1 * W, x2 = f.x2 * W, y1 = f.y1 * H, y2 = f.y2 * H
+        const mx = Math.max((x2 - x1) * 0.08, W * 0.01), my = Math.max((y2 - y1) * 0.12, H * 0.008)
+        x1 = Math.max(0, Math.floor(x1 - mx)); y1 = Math.max(0, Math.floor(y1 - my))
+        x2 = Math.min(W, Math.ceil(x2 + mx)); y2 = Math.min(H, Math.ceil(y2 + my))
+        const c = document.createElement('canvas')
+        c.width = x2 - x1
+        c.height = y2 - y1
+        const ctx = c.getContext('2d')
+        ctx.fillStyle = '#fff'
+        ctx.fillRect(0, 0, c.width, c.height)
+        ctx.drawImage(page, x1, y1, c.width, c.height, 0, 0, c.width, c.height)
+        return { blob: await toBlob(c, 'image/png'), url: c.toDataURL('image/png') }
+      }
+
+      const safe = (t) => String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9_-]+/g, '_').replace(/^_|_$/g, '')
 
       // ---------- Interfaz ----------
       function setFiles(fileList) {
@@ -316,16 +337,16 @@
       function showUsage(li, consumo) {
         if (!consumo || !consumo.tiempo_ms) return
         const p = addText(li, 'usage', '')
-        p.innerHTML = 'Tiempo en Peach: <strong></strong> · Consultas de estado: <strong></strong> · Id Peach: <strong></strong>'
+        p.innerHTML = 'Claude: <strong></strong> · Tokens: <strong></strong> · Coste aprox.: <strong></strong>'
         const [a, b, c] = p.querySelectorAll('strong')
         a.textContent = segs(consumo.tiempo_ms)
-        b.textContent = consumo.consultas ?? '–'
-        c.textContent = consumo.documento_peach ?? '–'
+        b.textContent = ((consumo.tokens_entrada || 0) + (consumo.tokens_salida || 0)).toLocaleString('es-ES')
+        c.textContent = consumo.coste_usd != null ? consumo.coste_usd.toLocaleString('es-ES', { maximumFractionDigits: 3 }) + ' $' : '–'
         totals.docs += 1
         totals.ms += consumo.tiempo_ms
         const total = document.getElementById('total')
         total.hidden = false
-        total.innerHTML = 'Total de esta sesión: <strong></strong> documentos · <strong></strong> en Peach'
+        total.innerHTML = 'Total de esta sesión: <strong></strong> documentos · <strong></strong> en Claude'
         const [d, t] = total.querySelectorAll('strong')
         d.textContent = totals.docs
         t.textContent = segs(totals.ms)
@@ -358,47 +379,101 @@
           ['ETIQUETA', codes.etiqueta],
           ['TIPO', tipo],
         ])
-        if (!codes.cb) addText(li, 'warn', 'No se ha podido leer el código de barras principal: se usará el que devuelva Peach.')
+        if (!codes.cb) addText(li, 'warn', 'No se ha podido leer el código de barras principal: se usará el que lea Claude.')
 
-        // 2. Enviar a n8n (TIF → PDF porque Peach no acepta TIF)
-        setStatus(li, 'Procesando en Peach…', 'run')
-        let blob, name = file.name
-        if (/\.tiff?$/i.test(file.name)) {
-          blob = pagesToPdf(pages)
-          name = file.name.replace(/\.tiff?$/i, '.pdf')
-        } else {
-          blob = new Blob([await file.arrayBuffer()], { type: file.type || 'application/octet-stream' })
-        }
-        pages = null
+        // 2. Claude: datos + localización de firmas (se envían las páginas como JPEG)
+        setStatus(li, 'Analizando con Claude…', 'run')
         const body = new FormData()
-        body.append('file', blob, name)
+        const meta = []
+        for (let i = 0; i < pages.length; i++) {
+          const pg = await pageForClaude(pages[i])
+          meta.push({ w: pg.w, h: pg.h })
+          body.append('pagina_' + (i + 1), pg.blob, 'pagina_' + (i + 1) + '.jpg')
+        }
+        body.append('paginas_meta', JSON.stringify(meta))
         body.append('nombre_original', file.name)
         body.append('cb', codes.cb)
         body.append('etiqueta', codes.etiqueta)
-        body.append('codigos', JSON.stringify(codes.porPagina))
+        const data = await postJSON(WEBHOOK_URL, body, li)
+        if (!data) return
 
-        let res
-        try {
-          res = await fetch(WEBHOOK_URL, { method: 'POST', body })
-        } catch (err) {
-          return showError(li, 'No se pudo conectar con el servicio. Comprueba que el workflow de n8n está activo.')
+        // 3. Recortar las firmas del original a resolución completa
+        const firmas = []
+        for (const f of data.firmas || []) {
+          const page = pages[f.pagina - 1]
+          if (!page) continue
+          const crop = await cropSignature(page, f)
+          const base = safe(data.fila.CB || file.name.replace(/\.[a-z0-9]+$/i, ''))
+          firmas.push({ ...f, ...crop, nombre: `${base}_p${f.pagina}_${f.tipo}_${firmas.length + 1}.png` })
         }
-        const data = await res.json().catch(() => ({}))
-        if (!res.ok || !data.ok) {
-          const detail = typeof data.error === 'string' ? data.error : 'Respuesta ' + res.status + ' del servidor.'
-          return showError(li, detail)
+        pages = null
+        if (firmas.length) {
+          addText(li, 'section', 'Firmas encontradas (' + firmas.length + ')')
+          const grid = document.createElement('div')
+          grid.className = 'firmas'
+          firmas.forEach((f) => {
+            const fig = document.createElement('figure')
+            fig.innerHTML = '<img alt="" /><figcaption></figcaption>'
+            fig.querySelector('img').src = f.url
+            fig.querySelector('figcaption').textContent = `Pág. ${f.pagina} · ${f.tipo}` + (f.firmante ? ' · ' + f.firmante : '')
+            grid.appendChild(fig)
+          })
+          li.appendChild(grid)
+        } else {
+          addText(li, 'warn', 'Claude no ha encontrado firmas en el documento.')
         }
-        const filas = data.filas || []
-        setStatus(li, filas.length === 1 ? '1 fila añadida' : filas.length + ' filas añadidas', 'ok')
-        filas.forEach((fila) => addFields(li, 'Fila añadida a «ACartoes»', FIELDS.map(([k, label]) => [k + ' · ' + label, fila[k]])))
+
+        // 4. Guardar firmas en Drive y añadir la fila a la hoja
+        setStatus(li, 'Guardando…', 'run')
+        const save = new FormData()
+        save.append('fila', JSON.stringify(data.fila))
+        save.append('firmas', JSON.stringify(firmas.map(({ blob, url, ...f }) => f)))
+        firmas.forEach((f, i) => save.append('firma_' + (i + 1), f.blob, f.nombre))
+        const saved = await postJSON(WEBHOOK_GUARDAR, save, li)
+        if (!saved) return
+
+        setStatus(li, 'Fila añadida', 'ok')
+        const fila = { ...data.fila, 'N FIRMAS': String((saved.firmas || []).length) }
+        addFields(li, 'Fila añadida a «ACartoes»', FIELDS.map(([k, label]) => [k + ' · ' + label, fila[k]]))
+        if ((saved.firmas || []).length) {
+          const ul = document.createElement('ul')
+          ul.className = 'links'
+          saved.firmas.forEach((f) => {
+            const a = document.createElement('a')
+            a.href = f.enlace
+            a.target = '_blank'
+            a.rel = 'noopener'
+            a.textContent = f.nombre
+            const it = document.createElement('li')
+            it.appendChild(a)
+            ul.appendChild(it)
+          })
+          addText(li, 'section', 'Firmas en Google Drive')
+          li.appendChild(ul)
+        }
         showUsage(li, data.consumo)
-        if (filas[0] && filas[0]['OTROS DATOS']) {
-          let otros = filas[0]['OTROS DATOS']
+        if (data.fila['OTROS DATOS']) {
+          let otros = data.fila['OTROS DATOS']
           try { otros = JSON.parse(otros) } catch (e) {}
           addRaw(li, 'Ver otros datos extraídos', otros)
         }
-        if (data.datos_peach) addRaw(li, 'Ver datos originales de Peach', data.datos_peach)
         addRaw(li, 'Ver códigos de barras por página', codes.porPagina)
+      }
+
+      async function postJSON(url, body, li) {
+        let res
+        try {
+          res = await fetch(url, { method: 'POST', body })
+        } catch (err) {
+          showError(li, 'No se pudo conectar con el servicio. Comprueba que el workflow de n8n está activo.')
+          return null
+        }
+        const data = await res.json().catch(() => ({}))
+        if (!res.ok || !data.ok) {
+          showError(li, typeof data.error === 'string' ? data.error : 'Respuesta ' + res.status + ' del servidor.')
+          return null
+        }
+        return data
       }
 
       form.addEventListener('submit', async (e) => {
