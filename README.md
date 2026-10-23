@@ -33,7 +33,7 @@ Procesa documentos de tarjetas de novobanco (Alterações / Pedidos, Pagamentos,
 
 1. En el navegador: abre el TIF (o PDF/imagen) y lee los códigos de barras de cada página (ITF de 20 dígitos = **CB**, Code 39 `SEPnn` = **ETIQUETA**).
 2. Envía las páginas (JPEG, lado mayor 1568 px) al webhook `/webhook/acartoes` del workflow de n8n **«ACartoes · Claude + firmas a Drive y Google Sheet»**. Claude extrae los datos y devuelve la caja de cada firma o sello.
-3. La web recorta cada firma del original a resolución completa y la envía con la fila a `/webhook/acartoes-guardar`: n8n sube los PNG a Google Drive y añade la fila a la pestaña **«ACartoes»** del Sheet EOS.
+3. La web recorta cada firma del original a resolución completa y la envía con la fila a `/webhook/acartoes-guardar`: n8n sube los PNG a Google Drive y añade la fila a la pestaña **«Datos»** del Google Sheet **ACartoes** (https://docs.google.com/spreadsheets/d/1s2K873ZdJHj-oTi5e7ZrkHoaEgDkwb0h67EYfQVPAFI); la pestaña «Campos» describe cada columna.
 
 | NOMBRE PDF | TIPO | CB | DATACB | DATA | ETIQUETA | NCONTA | NCARTAO | NCONTACARTAO | N FIRMAS | FIRMAS | FUENTE CB | OTROS DATOS |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
